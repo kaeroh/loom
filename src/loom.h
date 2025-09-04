@@ -62,7 +62,12 @@ typedef struct Region {
     char *data;
     uint64_t size;
     uint64_t capacity;
+    Region *next;
 } Region;
+
+typedef struct Arena {
+    Region *head, *tail;
+} Arena;
 
 typedef enum LogLevel {
     INFO,
@@ -72,7 +77,14 @@ typedef enum LogLevel {
 } LogLevel;
 
 void loom_log(LogLevel level, const char *fmt, ...);
-Region *new_lone_Region();
+
+void init_arena(Arena *arena);
+void free_arena(Arena *arena);
+void grow_arena(Arena *arena, size_t size);
+char *arena_make_str(Arena *arena, const char *str);
+void *arena_alloc(Arena *arena, size_t size);
+
+Region *new_lone_region();
 void free_region(Region *region);
 void *region_alloc(Region *region, size_t size);
 char *region_make_str(Region *region, const char *str);
@@ -90,9 +102,11 @@ void grow_review_menu(ReviewMenu *menu);
 char *get_head(char *str);
 
 static Region folder_region;
-static Region review_region;
+static Arena review_arena;
 static FolderMenu folder_select;
 static ReviewMenu card_review;
+
+static FILE *log_file = NULL;
 
 
 // public api implementation
@@ -105,12 +119,7 @@ void loom_init(const char *base_path) {
     folder_region.capacity = DEFAULT_REGION_CAPACITY;
     folder_region.size = 0;
 
-    review_region.data = (char*)malloc(DEFAULT_REGION_CAPACITY);
-    if (review_region.data == NULL) {
-        loom_log(ERROR, "failed to allocate review_region");
-    }
-    review_region.capacity = DEFAULT_REGION_CAPACITY;
-    review_region.size = 0;
+    init_arena(&review_arena);
 
     folder_select.folders = (Folder*)malloc(sizeof(Folder) * START_FOLDER_CAPACITY);
     if (!folder_select.folders) {
@@ -125,11 +134,17 @@ void loom_init(const char *base_path) {
         exit(1);
     }
     card_review.card_capacity = START_CARD_CAPACITY;
+
+    log_file = fopen("loom_log.txt", "w");
+    if (!log_file) {
+        loom_log(ERROR, "failed to create log file");
+        exit(1);
+    }
 }
 
 void loom_shutdown() {
     free(folder_region.data);
-    free(review_region.data);
+    free_arena(&review_arena);
 }
 
 void loom_open_dir(const char *path) {
@@ -225,7 +240,7 @@ void loom_log(LogLevel level, const char *fmt, ...) {
     case NO_LOGS: return;
     default:
         // TODO: unreachable stuff?
-        fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, "log");
+        fprintf(log_file, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, "log");
     }
 
     va_list args;
@@ -272,12 +287,14 @@ void recursive_card_search(ReviewMenu *menu, const char *path) {
             buff[strlen(buff)] = '/';
             strcat(buff, ent->d_name);
 
+            loom_log(INFO, "loading cards in: %s", buff);
             load_cards(menu, buff);
         } else if ((stat_buff.st_mode & S_IFMT) == S_IFDIR) {
             strcpy(buff, path);
             buff[strlen(buff)+1] = '\0';
             buff[strlen(buff)] = '/';
             strcat(buff, ent->d_name);
+            loom_log(INFO, "recursive search of: %s", buff);
             recursive_card_search(menu, buff);
         }
     }
@@ -291,7 +308,7 @@ void load_cards(ReviewMenu *menu, const char *path) {
 
     in = fopen(path, "r");
     if (!in) {
-        loom_log(ERROR, "Failed to open file");
+        loom_log(ERROR, "Failed to open file: %s", path);
         exit(1);
     }
 
@@ -317,9 +334,9 @@ void load_cards(ReviewMenu *menu, const char *path) {
 void add_card(ReviewMenu *menu, const char *front, const char *back, const char *path) {
     grow_review_menu(menu);
     Card *current = &menu->cards[menu->card_count];
-    current->front = region_make_str(&review_region, front);
-    current->back= region_make_str(&review_region, back);
-    current->path = region_make_str(&review_region, path);
+    current->front = arena_make_str(&review_arena, front);
+    current->back= arena_make_str(&review_arena, back);
+    current->path = arena_make_str(&review_arena, path);
     menu->card_count += 1;
 }
 
@@ -370,6 +387,7 @@ void chop_newline(char *str) {
     }
 }
 
+// returns the name of the file/dir witihout the leading directories
 char *get_head(char *str) {
     for (int i = strlen(str); i > 1; i--) {
         if (str[i] == '/') {
@@ -379,12 +397,44 @@ char *get_head(char *str) {
     return NULL;
 }
 
-Region *new_lone_Region() {
+void init_arena(Arena *arena) {
+    if (arena->head != NULL) {
+        loom_log(WARNING, "attempted to initialize already initialized arena.");
+        return;
+    }
+    
+    arena->head = new_lone_region();
+    arena->tail = arena->head;
+}
+
+void free_arena(Arena *arena) {
+    Region *current = arena->head;
+    Region *next = arena->head;
+    while (current != NULL) {
+        next = current->next;
+        free_region(current);
+        current = next;
+    }
+}
+
+void grow_arena(Arena *arena, size_t size) {
+    if (arena->tail->size + size < arena->tail->capacity) return;
+    arena->tail->next = new_lone_region();
+    arena->tail = arena->tail->next;
+}
+
+void *arena_alloc(Arena *arena, size_t size) {
+    grow_arena(arena, size);
+    return region_alloc(arena->tail, size);
+}
+
+Region *new_lone_region() {
     char *alloc = (char*)malloc(sizeof(Region) + DEFAULT_REGION_CAPACITY);
     Region *region = (Region*)alloc;
     region->data = alloc + sizeof(Region);
     region->capacity = DEFAULT_REGION_CAPACITY;
     region->size = 0;
+    region->next = NULL;
     return region;
 }
 
@@ -401,6 +451,15 @@ void *region_alloc(Region *region, size_t size) {
     memset(result, 0, size);
     region->size += size;
     return result;
+}
+
+char *arena_make_str(Arena *arena, const char *str) {
+    uint64_t len = strlen(str);
+    char *alloc = (char*)arena_alloc(arena, (sizeof(char) * len) + 1);
+    strcpy(alloc, str);
+    alloc[len] = '\0';
+
+    return alloc;
 }
 
 char *region_make_str(Region *region, const char *str) {

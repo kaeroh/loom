@@ -7,7 +7,6 @@
 #define LOOM_IMPL_
 #include "loom.h"
 
-#include <imgui/imgui.h>
 #include <imtui/imtui-impl-text.h>
 #include <imtui/imtui.h>
 #include <imtui/imtui-impl-ncurses.h>
