@@ -1,5 +1,6 @@
 #include <cmath>
 #include <filesystem>
+#include <imtui/imgui/imgui.h>
 #include <iterator>
 #include <string>
 #include <unistd.h>
@@ -158,6 +159,10 @@ void update() {
 
     switch (state.view) {
     case REVIEWING_CARDS:
+        if (ImGui::IsKeyPressed('q')) {
+            state.view = BROWSING_FOLDERS;
+            break;
+        }
         if (review_menu()->showing_front) {
             if (ImGui::IsKeyPressed('j')) {
                 advance_review(false);
@@ -186,7 +191,7 @@ void update() {
             open_parent_folder();
         }
         if (ImGui::IsKeyPressed('r')) {
-            load_review(state.current_dir.c_str());
+            load_review(state.current_dir.c_str(), true);
             state.view = REVIEWING_CARDS;
         }
         break;

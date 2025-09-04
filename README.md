@@ -1,1 +1,1 @@
-TODO: key to exit from review
+review markdown files as flashcards

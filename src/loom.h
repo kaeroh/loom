@@ -36,7 +36,7 @@ void loom_shutdown();
 
 void loom_open_dir(const char *path);
 
-void load_review(const char *path);
+void load_review(const char *path, bool randomize);
 void advance_review(bool correct);
 
 const FolderMenu *folder_menu();
@@ -57,6 +57,7 @@ const ReviewMenu *review_menu();
 #include <stdlib.h>
 #include <dirent.h>
 #include <stdio.h>
+#include <random>
 
 typedef struct Region {
     char *data;
@@ -81,6 +82,7 @@ void loom_log(LogLevel level, const char *fmt, ...);
 void init_arena(Arena *arena);
 void free_arena(Arena *arena);
 void grow_arena(Arena *arena, size_t size);
+void flush_arena(Arena *arena);
 char *arena_make_str(Arena *arena, const char *str);
 void *arena_alloc(Arena *arena, size_t size);
 
@@ -188,10 +190,25 @@ void loom_open_dir(const char *path) {
     }
 }
 
-void load_review(const char *path) {
+void load_review(const char *path, bool randomize) {
+    flush_arena(&review_arena);
+    card_review.correct = 0;
+    card_review.incorrect = 0;
     card_review.showing_front = true;
     card_review.current_card = 0;
+    card_review.card_count = 0;
     recursive_card_search(&card_review, path);
+
+    if (!randomize) {
+        return;
+    }
+
+    for (int i = 0; i < card_review.card_count; i++) {
+        int index = rand() % (card_review.card_count);
+        Card temp = card_review.cards[i];
+        card_review.cards[i] = card_review.cards[index];
+        card_review.cards[index] = temp;
+    }
 }
 
 void advance_review(bool correct) {
@@ -422,6 +439,15 @@ void grow_arena(Arena *arena, size_t size) {
     arena->tail->next = new_lone_region();
     arena->tail = arena->tail->next;
 }
+
+void flush_arena(Arena *arena) {
+    Region *current = arena->head;
+    while (current != NULL) {
+        current->size = 0;
+        current = current->next;
+    }
+}
+
 
 void *arena_alloc(Arena *arena, size_t size) {
     grow_arena(arena, size);
