@@ -1,6 +1,5 @@
 #include <cmath>
 #include <filesystem>
-#include <imtui/imgui/imgui.h>
 #include <iterator>
 #include <string>
 #include <unistd.h>
@@ -123,6 +122,10 @@ void render() {
         ImGui::SetCursorPos(ImVec2(2, 2));
         ImGui::TextColored(ImVec4(1.0, 0.2, 0.15, 1.0), "%lu", review->incorrect);
 
+        strcpy(buff, review->cards[review->current_card].path);
+        ImGui::SetCursorPos(ImVec2(state.screen_size.x/2 - (int32_t)(strlen(loom_truncate_path(buff, 1)) / 2), 4));
+        ImGui::Text("%s", loom_truncate_path(buff, 1));
+
         sprintf(buff, "%lu", review->current_card);
         strcat(buff, " -> ");
         sprintf(buff2, "%lu", review->card_count);
@@ -136,9 +139,9 @@ void render() {
 
         ImGui::SetCursorPos(ImVec2(2, 6));
         if (review->showing_front) {
-            ImGui::Text("%s", current_card->front);
+            ImGui::TextWrapped("%s", current_card->front);
         } else {
-            ImGui::Text("%s", current_card->back);
+            ImGui::TextWrapped("%s", current_card->back);
         }
 
         break;

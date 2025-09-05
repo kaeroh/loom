@@ -39,6 +39,8 @@ void loom_open_dir(const char *path);
 void load_review(const char *path, bool randomize);
 void advance_review(bool correct);
 
+char *loom_truncate_path(char *str, int num_paths);
+
 const FolderMenu *folder_menu();
 const ReviewMenu *review_menu();
 
@@ -100,8 +102,6 @@ void recursive_card_search(ReviewMenu *menu, const char *path);
 void load_cards(ReviewMenu *menu, const char *path);
 void add_card(ReviewMenu *menu, const char *front, const char *back, const char *path);
 void grow_review_menu(ReviewMenu *menu);
-
-char *get_head(char *str);
 
 static Region folder_region;
 static Arena review_arena;
@@ -375,7 +375,7 @@ void add_folder(FolderMenu *menu, const char *path) {
     grow_folder_menu(menu);
 
     menu->folders[menu->folder_count].path = region_make_str(&folder_region, path);
-    menu->folders[menu->folder_count].display_name = get_head(menu->folders[menu->folder_count].path);
+    menu->folders[menu->folder_count].display_name = loom_truncate_path(menu->folders[menu->folder_count].path, 0);
     menu->folder_count += 1;
 }
 
@@ -405,9 +405,14 @@ void chop_newline(char *str) {
 }
 
 // returns the name of the file/dir witihout the leading directories
-char *get_head(char *str) {
+char *loom_truncate_path(char *str, int num_paths) {
+    int count = 0;
     for (int i = strlen(str); i > 1; i--) {
         if (str[i] == '/') {
+            if (count < num_paths) {
+                count ++;
+                continue;
+            }
             return &str[i+1];
         }
     }
