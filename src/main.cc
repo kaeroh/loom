@@ -166,6 +166,23 @@ void update() {
             state.view = BROWSING_FOLDERS;
             break;
         }
+
+        if (review_menu()->reverse) {
+            if (!review_menu()->showing_front) {
+                if (ImGui::IsKeyPressed('j')) {
+                    advance_review(false);
+                }
+            } else {
+                if (ImGui::IsKeyPressed('l')) {
+                    advance_review(true);
+                }
+                else if (ImGui::IsKeyPressed('h')) {
+                    advance_review(false);
+                }
+            }
+            break;
+        }
+
         if (review_menu()->showing_front) {
             if (ImGui::IsKeyPressed('j')) {
                 advance_review(false);
@@ -194,7 +211,11 @@ void update() {
             open_parent_folder();
         }
         if (ImGui::IsKeyPressed('r')) {
-            load_review(state.current_dir.c_str(), true);
+            load_review(state.current_dir.c_str(), false, true);
+            state.view = REVIEWING_CARDS;
+        }
+        if (ImGui::IsKeyPressed('R')) {
+            load_review(state.current_dir.c_str(), true, true);
             state.view = REVIEWING_CARDS;
         }
         break;

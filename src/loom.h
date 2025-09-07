@@ -29,6 +29,7 @@ typedef struct ReviewMenu {
     uint64_t incorrect;
     Card *cards;
     bool showing_front;
+    bool reverse;
 } ReviewMenu;
 
 void loom_init(const char *base_path);
@@ -36,7 +37,7 @@ void loom_shutdown();
 
 void loom_open_dir(const char *path);
 
-void load_review(const char *path, bool randomize);
+void load_review(const char *path, bool reverse, bool randomize);
 void advance_review(bool correct);
 
 char *loom_truncate_path(char *str, int num_paths);
@@ -190,13 +191,18 @@ void loom_open_dir(const char *path) {
     }
 }
 
-void load_review(const char *path, bool randomize) {
+void load_review(const char *path, bool reverse,  bool randomize) {
     flush_arena(&review_arena);
     card_review.correct = 0;
     card_review.incorrect = 0;
-    card_review.showing_front = true;
     card_review.current_card = 0;
     card_review.card_count = 0;
+    if (reverse) {
+        card_review.showing_front = false;
+        card_review.reverse = reverse;
+    } else {
+        card_review.showing_front = true;
+    }
     recursive_card_search(&card_review, path);
 
     if (!randomize) {
@@ -215,6 +221,24 @@ void advance_review(bool correct) {
     if (card_review.current_card + 1 > card_review.card_count) {
         return;
     }
+
+    if (card_review.reverse) {
+        if (!card_review.showing_front) {
+            card_review.showing_front = true;
+            return;
+        }
+        if (correct) {
+            card_review.correct += 1;
+        } else {
+            card_review.incorrect += 1;
+        }
+        if (card_review.current_card + 1 <= card_review.card_count) {
+            card_review.current_card += 1;
+        }
+        card_review.showing_front = false;
+        return;
+    }
+
     if (card_review.showing_front) {
         card_review.showing_front = false;
         return;
