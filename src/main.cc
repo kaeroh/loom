@@ -213,10 +213,12 @@ void update() {
         if (ImGui::IsKeyPressed('r')) {
             load_review(state.current_dir.c_str(), false, true);
             state.view = REVIEWING_CARDS;
+            break;
         }
         if (ImGui::IsKeyPressed('R')) {
             load_review(state.current_dir.c_str(), true, true);
             state.view = REVIEWING_CARDS;
+            break;
         }
         break;
 
